@@ -13,14 +13,14 @@ import os
 def init_db():
     conn = sqlite3.connect('kampus_repository.db')
     cursor = conn.cursor()
-    # Tabel Dokumen Pembanding (Database Utama Kampus)
+    # Tabel Dokumen Pembanding
     cursor.execute('''CREATE TABLE IF NOT EXISTS dokumen_alumni 
                       (id INTEGER PRIMARY KEY AUTOINCREMENT, penulis TEXT, judul TEXT, isi_teks TEXT)''')
-    # Tabel Pengguna/Akun Dosen
+    # Tabel Pengguna/Akun
     cursor.execute('''CREATE TABLE IF NOT EXISTS pengguna 
                       (username TEXT PRIMARY KEY, password TEXT, nama TEXT, role TEXT, status TEXT)''')
     
-    # Buat Akun Master Admin (Kamu) jika belum ada untuk memberikan izin ke Dosen
+    # Buat Akun Master Superadmin jika belum ada
     cursor.execute("SELECT username FROM pengguna WHERE username = 'superadmin'")
     if not cursor.fetchone():
         cursor.execute("INSERT INTO pengguna VALUES ('superadmin', 'master123', 'Pemilik Sistem', 'Superadmin', 'Aktif')")
@@ -121,31 +121,30 @@ if not st.session_state.logged_in:
     tab1, tab2 = st.tabs(["Masuk Akun Dosen", "Registrasi Akun Dosen Baru"])
     
     with tab1:
-        user_input = st.text_input("NIDN / Username Dosen:")
+        user_input = st.text_input("NIDN / Username:")
         pass_input = st.text_input("Password:", type="password")
         if st.button("Masuk Ke Dashboard"):
             user_data = login_user(user_input, pass_input)
             if user_data:
                 st.session_state.logged_in = True
-                st.session_state.username = user_data
-                st.session_state.nama = user_data
-                st.session_state.role = user_data
-                st.session_state.status = user_data
+                st.session_state.username = str(user_data)
+                st.session_state.nama = str(user_data)
+                st.session_state.role = str(user_data)
+                st.session_state.status = str(user_data)
                 st.rerun()
             else:
-                st.error("Akun Dosen tidak ditemukan atau password salah!")
+                st.error("Akun tidak ditemukan atau password salah!")
                 
     with tab2:
         reg_user = st.text_input("Buat Username / NIDN:")
         reg_nama = st.text_input("Nama Lengkap Dosen (Beserta Gelar):")
-        st.caption("Contoh: Dr. Eko Putra, M.Kom.")
         reg_pass = st.text_input("Buat Password Akun:", type="password", key="reg_pass")
         if st.button("Ajukan Pendaftaran"):
             if reg_user and reg_nama and reg_pass:
                 if register_dosen(reg_user, reg_pass, reg_nama):
-                    st.success("Pendaftaran berhasil diajukan! Silakan hubungi pemilik sistem (Admin) untuk mengaktifkan status izin akses akun Anda.")
+                    st.success("Pendaftaran berhasil diajukan! Silakan hubungi Superadmin untuk aktivasi.")
                 else:
-                    st.warning("NIDN/Username tersebut sudah terdaftar di sistem.")
+                    st.warning("Username/NIDN tersebut sudah terdaftar.")
             else:
                 st.error("Semua kolom registrasi wajib diisi!")
 
@@ -158,11 +157,10 @@ else:
     st.sidebar.write(f"**Hak Akses:** {st.session_state.role}")
     st.sidebar.write(f"**Status Izin:** {st.session_state.status}")
     
-    # Penentuan Menu Berdasarkan Level Login
-    if st.session_state.role == "Superadmin":
+    # Penentuan Menu yang Jauh Lebih Akurat
+    if st.session_state.role.lower() == "superadmin":
         list_menu = ["⚙️ Aktivasi Izin Akun Dosen", "➕ Input Database Acuan"]
     else:
-        # Jika Dosen
         list_menu = ["🔍 Cek Plagiarisme Tugas Mahasiswa", "📁 Upload Massal Tugas Kelas"]
         
     st.sidebar.markdown("---")
@@ -178,11 +176,9 @@ else:
     if menu == "🔍 Cek Plagiarisme Tugas Mahasiswa":
         st.title("📊 Pemeriksaan Tugas Kuliah / Skripsi Mahasiswa")
         
-        # JIKA AKUN DOSEN BELUM DIAKTIFKAN OLEH SUPERADMIN
         if st.session_state.status == "Pending":
-            st.warning("⚠️ Akses Ditangguhkan! Akun Dosen Anda belum diaktifkan/diberi izin oleh Superadmin sistem. Silakan konfirmasi ke pihak pengelola aplikasi.")
+            st.warning("⚠️ Akses Ditangguhkan! Akun Dosen Anda belum diaktifkan/diberi izin oleh Superadmin.")
         else:
-            st.write("Unggah dokumen tugas mandiri mahasiswa untuk menguji tingkat kemiripannya dengan pangkalan data.")
             file_diunggah = st.file_uploader("Pilih file tugas (.pdf):", type=["pdf"])
             
             col_cek1, col_cek2 = st.columns(2)
@@ -192,14 +188,14 @@ else:
                 if st.button("🔄 Bersihkan Halaman"): st.rerun()
                     
             if tombol_mulai and file_diunggah:
-                with st.spinner("Model IndoBERT sedang mengalkulasi kecocokan makna..."):
+                with st.spinner("Model IndoBERT sedang mengalkulasi..."):
                     teks_uji = ekstrak_teks_dari_pdf(file_diunggah)
                     if teks_uji.strip() == "":
                         st.error("Berkas PDF tidak terbaca atau kosong.")
                     else:
                         database_alumni = ambil_data_alumni()
                         if len(database_alumni) == 0:
-                            st.warning("Database pembanding masih kosong. Silakan isi data acuan terlebih dahulu.")
+                            st.warning("Database pembanding masih kosong.")
                         else:
                             vektor_uji = get_embedding(teks_uji)
                             hasil_list = []
@@ -228,37 +224,23 @@ else:
         if st.session_state.status == "Pending":
             st.warning("⚠️ Akses Ditangguhkan! Akun Dosen Anda belum diaktifkan.")
         else:
-            st.write("Gunakan fitur ini untuk langsung mengunggah seluruh file tugas satu kelas yang dikumpulkan mahasiswa minggu ini agar masuk ke database pembanding.")
-            
-            label_kelas = st.text_input("Nama Mata Kuliah & Kelas (Contoh: Struktur Data - Kelas A):")
+            label_kelas = st.text_input("Nama Mata Kuliah & Kelas:")
             list_upload_massal = st.file_uploader("Pilih semua file PDF tugas mahasiswa sekaligus:", type=["pdf"], accept_multiple_files=True)
             
-            col_scan1, col_scan2 = st.columns(2)
-            with col_scan1:
-                if st.button("Proses & Masukkan ke Database") and label_kelas and list_upload_massal:
-                    folder_target = "kumpulan_skripsi"
-                    if not os.path.exists(folder_target): os.makedirs(folder_target)
-                    
-                    counter = 0
-                    with st.spinner("Menyimpan data arsip tugas..."):
-                        for file_pdf in list_upload_massal:
-                            # Ambil nama mahasiswa dari nama file PDF nya (misal: Rendi_Septian.pdf)
-                            nama_mhs = file_pdf.name.replace(".pdf", "").replace("_", " ")
-                            
-                            with open(os.path.join(folder_target, file_pdf.name), "wb") as f: 
-                                f.write(file_pdf.getbuffer())
-                                
-                            teks_pdf = ekstrak_teks_dari_pdf(file_pdf)
-                            simpan_ke_database(nama_mhs, label_kelas, teks_pdf)
-                            counter += 1
-                    st.success(f"Berhasil! {counter} tugas mahasiswa kelas {label_kelas} aman disimpan ke pangkalan data pembanding.")
-            with col_scan2:
-                if st.button("🔄 Reset Halaman"): st.rerun()
+            if st.button("Proses & Masukkan ke Database") and label_kelas and list_upload_massal:
+                counter = 0
+                with st.spinner("Menyimpan data..."):
+                    for file_pdf in list_upload_massal:
+                        nama_mhs = file_pdf.name.replace(".pdf", "").replace("_", " ")
+                        teks_pdf = ekstrak_teks_dari_pdf(file_pdf)
+                        simpan_ke_database(nama_mhs, label_kelas, teks_pdf)
+                        counter += 1
+                st.success(f"Berhasil! {counter} tugas kelas {label_kelas} disimpan ke database.")
 
     # ------------------------------------------
     # LEVEL SUPERADMIN: MENU 1 - MANAJEMEN IZIN DOSEN
     # ------------------------------------------
-    elif menu == "⚙️ Aktivasi Izin Akun Dosen" and st.session_state.role == "Superadmin":
+    elif menu == "⚙️ Aktivasi Izin Akun Dosen":
         st.title("⚙️ Otorisasi Akun Dosen Baru")
         st.write("Berikan izin aktif kepada dosen yang baru mendaftar agar mereka bisa menggunakan fitur AI.")
         
@@ -282,9 +264,8 @@ else:
     # ------------------------------------------
     # LEVEL SUPERADMIN: MENU 2 - INPUT DATA ACUAN KAMPUS
     # ------------------------------------------
-    elif menu == "➕ Input Database Acuan" and st.session_state.role == "Superadmin":
+    elif menu == "➕ Input Database Acuan":
         st.title("➕ Pangkalan Data Acuan Utama")
-        st.write("Gunakan halaman ini untuk memasukkan data skripsi alumni masa lalu sebagai pembanding utama.")
         
         penulis_default = st.text_input("Nama Alumni / Sumber Tahun:")
         list_file_acuan = st.file_uploader("Pilih PDF Skripsi Alumni:", type=["pdf"], accept_multiple_files=True)
