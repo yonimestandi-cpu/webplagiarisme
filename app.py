@@ -8,8 +8,29 @@ from pypdf import PdfReader
 import os
 
 # ==========================================
-# 1. KONFIGURASI CORE AI & MODEL
+# 1. INITIALISASI DATABASE & MODEL AI
 # ==========================================
+def init_db():
+    conn = sqlite3.connect('kampus_repository.db')
+    cursor = conn.cursor()
+    # Tabel Dokumen Pembanding (Database Utama Kampus)
+    cursor.execute('''CREATE TABLE IF NOT EXISTS dokumen_alumni 
+                      (id INTEGER PRIMARY KEY AUTOINCREMENT, penulis TEXT, judul TEXT, isi_teks TEXT)''')
+    # Tabel Pengguna/Akun Dosen
+    cursor.execute('''CREATE TABLE IF NOT EXISTS pengguna 
+                      (username TEXT PRIMARY KEY, password TEXT, nama TEXT, role TEXT, status TEXT)''')
+    
+    # Buat Akun Master Admin (Kamu) jika belum ada untuk memberikan izin ke Dosen
+    cursor.execute("SELECT username FROM pengguna WHERE username = 'superadmin'")
+    if not cursor.fetchone():
+        cursor.execute("INSERT INTO pengguna VALUES ('superadmin', 'master123', 'Pemilik Sistem', 'Superadmin', 'Aktif')")
+        # Contoh Akun Dosen Default untuk simulasi awal
+        cursor.execute("INSERT INTO pengguna VALUES ('dosen1', 'dosen123', 'Dr. Irwan (Dosen NLP)', 'Dosen', 'Pending')")
+    conn.commit()
+    conn.close()
+
+init_db()
+
 @st.cache_resource
 def load_indo_bert():
     tokenizer = AutoTokenizer.from_pretrained("indobenchmark/indobert-base-p1")
@@ -27,7 +48,7 @@ def get_embedding(text):
 
 
 # ==========================================
-# 2. FUNGSI EKSTRAKSI & DATABASE
+# 2. FUNGSI EKSTRAKSI & MANAJEMEN DATA
 # ==========================================
 def ekstrak_teks_dari_pdf(file_pdf):
     reader = PdfReader(file_pdf)
@@ -61,168 +82,216 @@ def simpan_ke_database(penulis, judul, isi_teks):
 
 
 # ==========================================
-# 3. SIDEBAR NAVIGATION (MENU)
+# 3. SISTEM AUTENTIKASI (SESSION STATE)
 # ==========================================
-st.sidebar.title("📌 Menu Navigasi")
-menu = st.sidebar.radio("Pilih Halaman:", [
-    "🔍 Cek Plagiarisme PDF", 
-    "➕ Input Acuan via Web", 
-    "📁 Folder Scanner Otomatis"
-])
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.username = ""
+    st.session_state.nama = ""
+    st.session_state.role = ""
+    st.session_state.status = ""
+
+def login_user(username, password):
+    conn = sqlite3.connect('kampus_repository.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT username, nama, role, status FROM pengguna WHERE username = ? AND password = ?", (username, password))
+    user = cursor.fetchone()
+    conn.close()
+    return user
+
+def register_dosen(username, password, nama):
+    try:
+        conn = sqlite3.connect('kampus_repository.db')
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO pengguna VALUES (?, ?, ?, 'Dosen', 'Pending')", (username, password, nama))
+        conn.commit()
+        conn.close()
+        return True
+    except sqlite3.IntegrityError:
+        return False
 
 
 # ==========================================
-# HALAMAN 1: CEK PLAGIARISME
+# 4. INTERFACE LOGIN / REGISTER DOSEN
 # ==========================================
-if menu == "🔍 Cek Plagiarisme PDF":
-    st.title("📊 Semantic Plagiarism Dashboard")
-    st.subheader("Analisis Kemiripan Dokumen Berbasis IndoBERT")
+if not st.session_state.logged_in:
+    st.title("👨‍🏫 Semantic Plagiarism Portal (Dosen & Pemeriksa)")
+    st.write("Selamat datang di sistem pengecekan kemiripan tugas mahasiswa berbasis IndoBERT.")
     
-    file_diunggah = st.file_uploader("Unggah skripsi mahasiswa (.pdf) untuk diuji:", type=["pdf"])
+    tab1, tab2 = st.tabs(["Masuk Akun Dosen", "Registrasi Akun Dosen Baru"])
     
-    col_cek1, col_cek2 = st.columns(2)
-    with col_cek1:
-        tombol_mulai = st.button("Mulai Analisis")
-    with col_cek2:
-        if st.button("🔄 Bersihkan Halaman", key="btn_reset_cek"):
-            st.rerun()
-            
-    if tombol_mulai:
-        if file_diunggah:
-            with st.spinner("Mengekstrak dan menganalisis teks..."):
-                teks_uji = ekstrak_teks_dari_pdf(file_diunggah)
+    with tab1:
+        user_input = st.text_input("NIDN / Username Dosen:")
+        pass_input = st.text_input("Password:", type="password")
+        if st.button("Masuk Ke Dashboard"):
+            user_data = login_user(user_input, pass_input)
+            if user_data:
+                st.session_state.logged_in = True
+                st.session_state.username = user_data
+                st.session_state.nama = user_data
+                st.session_state.role = user_data
+                st.session_state.status = user_data
+                st.rerun()
+            else:
+                st.error("Akun Dosen tidak ditemukan atau password salah!")
                 
-                if teks_uji.strip() == "":
-                    st.error("File PDF kosong atau berupa hasil scan gambar.")
+    with tab2:
+        reg_user = st.text_input("Buat Username / NIDN:")
+        reg_nama = st.text_input("Nama Lengkap Dosen (Beserta Gelar):")
+        st.caption("Contoh: Dr. Eko Putra, M.Kom.")
+        reg_pass = st.text_input("Buat Password Akun:", type="password", key="reg_pass")
+        if st.button("Ajukan Pendaftaran"):
+            if reg_user and reg_nama and reg_pass:
+                if register_dosen(reg_user, reg_pass, reg_nama):
+                    st.success("Pendaftaran berhasil diajukan! Silakan hubungi pemilik sistem (Admin) untuk mengaktifkan status izin akses akun Anda.")
                 else:
-                    database_alumni = ambil_data_alumni()
-                    vektor_uji = get_embedding(teks_uji)
-                    hasil_list = []
-                    skor_tertinggi = 0
+                    st.warning("NIDN/Username tersebut sudah terdaftar di sistem.")
+            else:
+                st.error("Semua kolom registrasi wajib diisi!")
+
+# ==========================================
+# 5. DASHBOARD UTAMA (SETELAH LOGIN BERHASIL)
+# ==========================================
+else:
+    st.sidebar.title("⚙️ Panel Kontrol")
+    st.sidebar.write(f"**Nama:** {st.session_state.nama}")
+    st.sidebar.write(f"**Hak Akses:** {st.session_state.role}")
+    st.sidebar.write(f"**Status Izin:** {st.session_state.status}")
+    
+    # Penentuan Menu Berdasarkan Level Login
+    if st.session_state.role == "Superadmin":
+        list_menu = ["⚙️ Aktivasi Izin Akun Dosen", "➕ Input Database Acuan"]
+    else:
+        # Jika Dosen
+        list_menu = ["🔍 Cek Plagiarisme Tugas Mahasiswa", "📁 Upload Massal Tugas Kelas"]
+        
+    st.sidebar.markdown("---")
+    menu = st.sidebar.radio("Navigasi Fitur:", list_menu)
+    
+    if st.sidebar.button("🚪 Keluar dari Aplikasi"):
+        st.session_state.logged_in = False
+        st.rerun()
+
+    # ------------------------------------------
+    # LEVEL DOSEN: MENU 1 - CEK TUGAS MAHASISWA
+    # ------------------------------------------
+    if menu == "🔍 Cek Plagiarisme Tugas Mahasiswa":
+        st.title("📊 Pemeriksaan Tugas Kuliah / Skripsi Mahasiswa")
+        
+        # JIKA AKUN DOSEN BELUM DIAKTIFKAN OLEH SUPERADMIN
+        if st.session_state.status == "Pending":
+            st.warning("⚠️ Akses Ditangguhkan! Akun Dosen Anda belum diaktifkan/diberi izin oleh Superadmin sistem. Silakan konfirmasi ke pihak pengelola aplikasi.")
+        else:
+            st.write("Unggah dokumen tugas mandiri mahasiswa untuk menguji tingkat kemiripannya dengan pangkalan data.")
+            file_diunggah = st.file_uploader("Pilih file tugas (.pdf):", type=["pdf"])
+            
+            col_cek1, col_cek2 = st.columns(2)
+            with col_cek1:
+                tombol_mulai = st.button("Mulai Analisis Semantik")
+            with col_cek2:
+                if st.button("🔄 Bersihkan Halaman"): st.rerun()
                     
-                    for penulis, judul, isi_teks in database_alumni:
-                        vektor_asal = get_embedding(isi_teks)
-                        skor_kemiripan = cosine_similarity(vektor_uji, vektor_asal)
-                        persentase = skor_kemiripan.item() * 100
-                        
-                        if persentase >= 70:
-                            kategori = "🔴 Plagiarisme Tinggi"
-                        elif persentase >= 40:
-                            kategori = "🟡 Plagiarisme Sedang"
+            if tombol_mulai and file_diunggah:
+                with st.spinner("Model IndoBERT sedang mengalkulasi kecocokan makna..."):
+                    teks_uji = ekstrak_teks_dari_pdf(file_diunggah)
+                    if teks_uji.strip() == "":
+                        st.error("Berkas PDF tidak terbaca atau kosong.")
+                    else:
+                        database_alumni = ambil_data_alumni()
+                        if len(database_alumni) == 0:
+                            st.warning("Database pembanding masih kosong. Silakan isi data acuan terlebih dahulu.")
                         else:
-                            kategori = "🟢 Kemiripan Rendah"
+                            vektor_uji = get_embedding(teks_uji)
+                            hasil_list = []
+                            skor_tertinggi = 0
                             
-                        if persentase > skor_tertinggi:
-                            skor_tertinggi = persentase
-                        
-                        hasil_list.append({
-                            "Penulis/Sumber": penulis,
-                            "Judul Dokumen": judul,
-                            "Tingkat Kemiripan": f"{persentase:.2f}%",
-                            "Status": kategori
-                        })
-                        
-                    st.success("Analisis Selesai!")
-                    st.metric(label="Skor Kemiripan Tertinggi", value=f"{skor_tertinggi:.2f}%")
-                    st.dataframe(pd.DataFrame(hasil_list))
+                            for penulis, judul, isi_teks in database_alumni:
+                                vektor_asal = get_embedding(isi_teks)
+                                skor_kemiripan = cosine_similarity(vektor_uji, vektor_asal)
+                                persentase = skor_kemiripan.item() * 100
+                                
+                                kategori = "🔴 Plagiarisme Tinggi" if persentase >= 70 else "🟡 Plagiarisme Sedang" if persentase >= 40 else "🟢 Kemiripan Rendah"
+                                if persentase > skor_tertinggi: skor_tertinggi = persentase
+                                
+                                hasil_list.append({"Nama Mahasiswa/Sumber": penulis, "Judul/Materi Tugas": judul, "Tingkat Kemiripan Semantik": f"{persentase:.2f}%", "Kesimpulan": kategori})
+                                
+                            st.success("Pemeriksaan Selesai!")
+                            st.metric(label="Skor Kemiripan Tertinggi yang Ditemukan", value=f"{skor_tertinggi:.2f}%")
+                            st.dataframe(pd.DataFrame(hasil_list))
+
+    # ------------------------------------------
+    # LEVEL DOSEN: MENU 2 - UPLOAD MASSAL TUGAS KELAS
+    # ------------------------------------------
+    elif menu == "📁 Upload Massal Tugas Kelas":
+        st.title("📁 Batch Ingestion (Upload Kolektif Satu Kelas)")
+        
+        if st.session_state.status == "Pending":
+            st.warning("⚠️ Akses Ditangguhkan! Akun Dosen Anda belum diaktifkan.")
         else:
-            st.warning("Unggah file PDF terlebih dahulu.")
+            st.write("Gunakan fitur ini untuk langsung mengunggah seluruh file tugas satu kelas yang dikumpulkan mahasiswa minggu ini agar masuk ke database pembanding.")
+            
+            label_kelas = st.text_input("Nama Mata Kuliah & Kelas (Contoh: Struktur Data - Kelas A):")
+            list_upload_massal = st.file_uploader("Pilih semua file PDF tugas mahasiswa sekaligus:", type=["pdf"], accept_multiple_files=True)
+            
+            col_scan1, col_scan2 = st.columns(2)
+            with col_scan1:
+                if st.button("Proses & Masukkan ke Database") and label_kelas and list_upload_massal:
+                    folder_target = "kumpulan_skripsi"
+                    if not os.path.exists(folder_target): os.makedirs(folder_target)
+                    
+                    counter = 0
+                    with st.spinner("Menyimpan data arsip tugas..."):
+                        for file_pdf in list_upload_massal:
+                            # Ambil nama mahasiswa dari nama file PDF nya (misal: Rendi_Septian.pdf)
+                            nama_mhs = file_pdf.name.replace(".pdf", "").replace("_", " ")
+                            
+                            with open(os.path.join(folder_target, file_pdf.name), "wb") as f: 
+                                f.write(file_pdf.getbuffer())
+                                
+                            teks_pdf = ekstrak_teks_dari_pdf(file_pdf)
+                            simpan_ke_database(nama_mhs, label_kelas, teks_pdf)
+                            counter += 1
+                    st.success(f"Berhasil! {counter} tugas mahasiswa kelas {label_kelas} aman disimpan ke pangkalan data pembanding.")
+            with col_scan2:
+                if st.button("🔄 Reset Halaman"): st.rerun()
 
-
-# ==========================================
-# HALAMAN 2: INPUT ACUAN VIA WEB
-# ==========================================
-elif menu == "➕ Input Acuan via Web":
-    st.title("➕ Tambah Dokumen Pembanding")
-    st.write("Gunakan halaman ini untuk memasukkan dokumen acuan baru secara massal.")
-    
-    penulis_default = st.text_input("Label Sumber / Tahun (Contoh: Dokumen Alumni (2026)):")
-    list_file_acuan = st.file_uploader("Unggah PDF Acuan (Bisa pilih banyak file):", 
-                                       type=["pdf"], accept_multiple_files=True, key="acuan_massal")
-    
-    col_input1, col_input2 = st.columns(2)
-    with col_input1:
-        tombol_simpan = st.button("Simpan Dokumen")
-    with col_input2:
-        if st.button("🔄 Reset Form", key="btn_reset_input"):
+    # ------------------------------------------
+    # LEVEL SUPERADMIN: MENU 1 - MANAJEMEN IZIN DOSEN
+    # ------------------------------------------
+    elif menu == "⚙️ Aktivasi Izin Akun Dosen" and st.session_state.role == "Superadmin":
+        st.title("⚙️ Otorisasi Akun Dosen Baru")
+        st.write("Berikan izin aktif kepada dosen yang baru mendaftar agar mereka bisa menggunakan fitur AI.")
+        
+        conn = sqlite3.connect('kampus_repository.db')
+        cursor = conn.cursor()
+        
+        user_target = st.text_input("Masukkan Username/NIDN Dosen:")
+        status_baru = st.selectbox("Tentukan Izin Akses:", ["Aktif", "Pending"])
+        
+        if st.button("Perbarui Status Izin Dosen"):
+            cursor.execute("UPDATE pengguna SET status = ? WHERE username = ? AND role = 'Dosen'", (status_baru, user_target))
+            conn.commit()
+            st.success(f"Akun Dosen '{user_target}' sekarang berstatus: {status_baru}!")
             st.rerun()
             
-    if tombol_simpan:
-        if penulis_default and list_file_acuan:
-            counter_berhasil = 0
-            counter_duplikat = 0
-            
-            with st.spinner("Sedang memproses seluruh file PDF..."):
-                for file_acuan in list_file_acuan:
-                    teks_acuan = ekstrak_teks_dari_pdf(file_acuan)
-                    judul_otomatis = file_acuan.name.replace(".pdf", "")
-                    berhasil = simpan_ke_database(penulis_default, judul_otomatis, teks_acuan)
-                    if berhasil:
-                        counter_berhasil += 1
-                    else:
-                        counter_duplikat += 1
-            
-            if counter_berhasil > 0:
-                st.success(f"Sukses! {counter_berhasil} dokumen baru berhasil disimpan.")
-            if counter_duplikat > 0:
-                st.warning(f"{counter_duplikat} dokumen dilewati karena judulnya duplikat.")
-        else:
-            st.error("Mohon isi label sumber dan pilih file PDF!")
+        st.subheader("📋 Daftar Akun Dosen Terdaftar")
+        df_user = pd.read_sql_query("SELECT username as 'NIDN/Username', nama as 'Nama Lengkap', role as 'Jabatan', status as 'Status Izin' FROM pengguna WHERE role = 'Dosen'", conn)
+        conn.close()
+        st.dataframe(df_user)
 
-
-# ==========================================
-# HALAMAN 3: FOLDER SCANNER
-# ==========================================
-elif menu == "📁 Folder Scanner Otomatis":
-    st.title("📁 Batch Folder Scanner & Ingestion")
-    st.write("Unggah banyak file PDF sekaligus lewat browser untuk otomatis diarsipkan secara fisik dan digital.")
-    
-    list_upload_massal = st.file_uploader(
-        "Pilih atau seret semua file PDF alumni di sini:", 
-        type=["pdf"], 
-        accept_multiple_files=True,
-        key="folder_upload_massal"
-    )
-    
-    col_scan1, col_scan2 = st.columns(2)
-    with col_scan1:
-        tombol_pindai = st.button("Pindai & Sinkronisasi")
-    with col_scan2:
-        if st.button("🔄 Reset Halaman", key="btn_reset_scan"):
-            st.rerun()
-            
-    if tombol_pindai:
-        if list_upload_massal:
-            folder_target = "kumpulan_skripsi"
-            if not os.path.exists(folder_target):
-                os.makedirs(folder_target)
-                
-            counter_tersimpan = 0
-            counter_duplikat = 0
-            
-            with st.spinner("Menyinkronkan data..."):
-                for file_pdf in list_upload_massal:
-                    path_simpan_fisik = os.path.join(folder_target, file_pdf.name)
-                    with open(path_simpan_fisik, "wb") as f:
-                        f.write(file_pdf.getbuffer())
-                    
-                    teks_pdf = ekstrak_teks_dari_pdf(file_pdf)
-                    judul_clean = file_pdf.name.replace(".pdf", "")
-                    berhasil = simpan_ke_database("Sistem Scanner (2026)", judul_clean, teks_pdf)
-                    
-                    if berhasil:
-                        counter_tersimpan += 1
-                    else:
-                        counter_duplikat += 1
-            
-            st.success(f"⚡ Sinkronisasi Berhasil! {counter_tersimpan} dokumen masuk database.")
-            if counter_duplikat > 0:
-                st.warning(f"ℹ️ {counter_duplikat} dokumen dilewati karena duplikat.")
-                
-            st.write("### 🗄️ Status Repositori Database Saat Ini:")
-            conn = sqlite3.connect('kampus_repository.db')
-            df_sekarang = pd.read_sql_query("SELECT penulis, judul FROM dokumen_alumni", conn)
-            conn.close()
-            st.dataframe(df_sekarang)
-        else:
-            st.error("Silakan masukkan file-file PDF terlebih dahulu!")
+    # ------------------------------------------
+    # LEVEL SUPERADMIN: MENU 2 - INPUT DATA ACUAN KAMPUS
+    # ------------------------------------------
+    elif menu == "➕ Input Database Acuan" and st.session_state.role == "Superadmin":
+        st.title("➕ Pangkalan Data Acuan Utama")
+        st.write("Gunakan halaman ini untuk memasukkan data skripsi alumni masa lalu sebagai pembanding utama.")
+        
+        penulis_default = st.text_input("Nama Alumni / Sumber Tahun:")
+        list_file_acuan = st.file_uploader("Pilih PDF Skripsi Alumni:", type=["pdf"], accept_multiple_files=True)
+        
+        if st.button("Simpan ke Repositori") and penulis_default and list_file_acuan:
+            for file_acuan in list_file_acuan:
+                teks_acuan = ekstrak_teks_dari_pdf(file_acuan)
+                judul_otomatis = file_acuan.name.replace(".pdf", "")
+                simpan_ke_database(penulis_default, judul_otomatis, teks_acuan)
+            st.success("Data arsip kampus berhasil ditambahkan.")
