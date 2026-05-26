@@ -1,1 +1,6 @@
-
+streamlit
+pandas
+torch
+transformers
+scikit-learn
+pypdf
