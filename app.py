@@ -98,11 +98,13 @@ def login_user(username, password):
     conn.close()
     return user
 
-def register_dosen(username, password, nama):
+def register_user(username, password, nama, role):
+    # Jika mahasiswa langsung Aktif, jika dosen otomatis Pending
+    status_awal = "Aktif" if role == "Mahasiswa" else "Pending"
     try:
         conn = sqlite3.connect('database_plagiarisme_baru.db')
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO pengguna VALUES (?, ?, ?, 'Dosen', 'Pending')", (username, password, nama))
+        cursor.execute("INSERT INTO pengguna VALUES (?, ?, ?, ?, ?)", (username, password, nama, role, status_awal))
         conn.commit()
         conn.close()
         return True
@@ -111,16 +113,16 @@ def register_dosen(username, password, nama):
 
 
 # ==========================================
-# 4. INTERFACE LOGIN / REGISTER
+# 4. INTERFACE LOGIN / REGISTER MULTI-ROLE
 # ==========================================
 if not st.session_state.logged_in:
     st.title("👨‍🏫 Semantic Plagiarism Portal")
     st.write("Selamat datang di sistem pengecekan kemiripan tugas berbasis AI IndoBERT.")
     
-    tab1, tab2 = st.tabs(["Masuk Akun", "Registrasi Akun Dosen Baru"])
+    tab1, tab2 = st.tabs(["Masuk Akun", "Registrasi Akun Baru"])
     
     with tab1:
-        user_input = st.text_input("Username / NIDN:")
+        user_input = st.text_input("Username / NPM / NIDN:")
         pass_input = st.text_input("Password:", type="password")
         if st.button("Masuk Ke Dashboard"):
             user_data = login_user(user_input, pass_input)
@@ -135,15 +137,25 @@ if not st.session_state.logged_in:
                 st.error("Akun tidak ditemukan atau password salah!")
                 
     with tab2:
-        reg_user = st.text_input("Buat Username / NIDN:")
-        reg_nama = st.text_input("Nama Lengkap Dosen (Beserta Gelar):")
+        reg_role = st.selectbox("Pilih Tipe Akun:", ["Mahasiswa", "Dosen"])
+        reg_user = st.text_input("Buat Username (NPM untuk Mahasiswa / NIDN untuk Dosen):")
+        reg_nama = st.text_input("Nama Lengkap:")
         reg_pass = st.text_input("Buat Password Akun:", type="password", key="reg_pass")
-        if st.button("Ajukan Pendaftaran"):
+        
+        if reg_role == "Mahasiswa":
+            st.caption("✨ Akun Mahasiswa akan otomatis aktif setelah mendaftar.")
+        else:
+            st.caption("⚠️ Akun Dosen memerlukan aktivasi manual dari Superadmin setelah diajukan.")
+            
+        if st.button("Daftar Sekarang"):
             if reg_user and reg_nama and reg_pass:
-                if register_dosen(reg_user, reg_pass, reg_nama):
-                    st.success("Pendaftaran berhasil! Silakan hubungi Superadmin untuk aktivasi.")
+                if register_user(reg_user, reg_pass, reg_nama, reg_role):
+                    if reg_role == "Mahasiswa":
+                        st.success("Pendaftaran berhasil! Akun Anda sudah AKTIF. Silakan pindah ke tab 'Masuk Akun' untuk login.")
+                    else:
+                        st.success("Pendaftaran Dosen berhasil diajukan! Harap hubungi Superadmin untuk aktivasi.")
                 else:
-                    st.warning("Username/NIDN tersebut sudah terdaftar.")
+                    st.warning("Username/NPM/NIDN tersebut sudah terdaftar di sistem.")
             else:
                 st.error("Semua kolom registrasi wajib diisi!")
 
@@ -162,7 +174,7 @@ else:
     st.sidebar.write(f"**Hak Akses:** {st.session_state.role}")
     st.sidebar.write(f"**Status Izin:** {st.session_state.status}")
     
-    # LOGIKA BARU: Jika Superadmin, BUKA SEMUA MENU!
+    # LOGIKA NAVIGASI MENU BERDASARKAN ROLE
     if st.session_state.role == "Superadmin":
         list_menu = [
             "🔍 Cek Plagiarisme Tugas Mahasiswa", 
@@ -170,10 +182,14 @@ else:
             "⚙️ Aktivasi Izin Akun Dosen", 
             "➕ Input Database Acuan"
         ]
-    else:
+    elif st.session_state.role == "Dosen":
         list_menu = [
             "🔍 Cek Plagiarisme Tugas Mahasiswa", 
             "📁 Upload Massal Tugas Kelas"
+        ]
+    else:  # Jika Mahasiswa
+        list_menu = [
+            "🔍 Cek Plagiarisme Tugas Mahasiswa"
         ]
         
     st.sidebar.markdown("---")
@@ -184,14 +200,15 @@ else:
         st.rerun()
 
     # ------------------------------------------
-    # MENU 1: CEK TUGAS MAHASISWA (Bisa diakses Dosen & Superadmin)
+    # MENU 1: CEK TUGAS / PLAGIARISME (Bisa diakses Semua Role)
     # ------------------------------------------
     if menu == "🔍 Cek Plagiarisme Tugas Mahasiswa":
-        st.title("📊 Pemeriksaan Tugas Kuliah / Skripsi Mahasiswa")
+        st.title("📊 Pemeriksaan Tingkat Kemiripan Dokumen")
         
         if st.session_state.status == "Pending":
-            st.warning("⚠️ Akses Ditangguhkan! Akun Anda belum diaktifkan/diberi izin oleh Superadmin.")
+            st.warning("⚠️ Akses Ditangguhkan! Akun Anda belum diaktifkan oleh Superadmin.")
         else:
+            st.write("Silakan unggah file PDF untuk dianalisis tingkat kemiripan semantiknya dengan database kampus.")
             file_diunggah = st.file_uploader("Pilih file tugas (.pdf):", type=["pdf"])
             
             col_cek1, col_cek2 = st.columns(2)
@@ -201,14 +218,14 @@ else:
                 if st.button("🔄 Bersihkan Halaman"): st.rerun()
                     
             if tombol_mulai and file_diunggah:
-                with st.spinner("Model IndoBERT sedang mengalkulasi..."):
+                with st.spinner("Model IndoBERT sedang mengalkulasi kecocokan makna..."):
                     teks_uji = ekstrak_teks_dari_pdf(file_diunggah)
                     if teks_uji.strip() == "":
                         st.error("Berkas PDF tidak terbaca atau kosong.")
                     else:
                         database_alumni = ambil_data_alumni()
                         if len(database_alumni) == 0:
-                            st.warning("Database pembanding masih kosong. Silakan isi data lewat fitur Upload Massal atau Input Acuan terlebih dahulu.")
+                            st.warning("Database pembanding masih kosong. Hubungi dosen/admin untuk mengisi data acuan terlebih dahulu.")
                         else:
                             vektor_uji = get_embedding(teks_uji)
                             hasil_list = []
@@ -222,20 +239,20 @@ else:
                                 kategori = "🔴 Plagiarisme Tinggi" if persentase >= 70 else "🟡 Plagiarisme Sedang" if persentase >= 40 else "🟢 Kemiripan Rendah"
                                 if persentase > skor_tertinggi: skor_tertinggi = persentase
                                 
-                                hasil_list.append({"Nama Mahasiswa/Sumber": penulis, "Judul/Materi Tugas": judul, "Tingkat Kemiripan Semantik": f"{persentase:.2f}%", "Kesimpulan": kategori})
+                                hasil_list.append({"Nama Pengunggah/Sumber": penulis, "Mata Kuliah/Judul": judul, "Kemiripan Semantik": f"{persentase:.2f}%", "Kesimpulan": kategori})
                                 
                             st.success("Pemeriksaan Selesai!")
-                            st.metric(label="Skor Kemiripan Tertinggi yang Ditemukan", value=f"{skor_tertinggi:.2f}%")
+                            st.metric(label="Skor Kemiripan Tertinggi", value=f"{skor_tertinggi:.2f}%")
                             st.dataframe(pd.DataFrame(hasil_list))
 
     # ------------------------------------------
-    # MENU 2: UPLOAD MASSAL TUGAS KELAS (Bisa diakses Dosen & Superadmin)
+    # MENU 2: UPLOAD MASSAL TUGAS KELAS (Dosen & Superadmin Only)
     # ------------------------------------------
     elif menu == "📁 Upload Massal Tugas Kelas":
         st.title("📁 Batch Ingestion (Upload Kolektif Satu Kelas)")
         
         if st.session_state.status == "Pending":
-            st.warning("⚠️ Akses Ditangguhkan! Akun Anda belum diaktifkan.")
+            st.warning("⚠️ Akses Ditangguhkan!")
         else:
             label_kelas = st.text_input("Nama Mata Kuliah & Kelas:")
             list_upload_massal = st.file_uploader("Pilih semua file PDF tugas mahasiswa sekaligus:", type=["pdf"], accept_multiple_files=True)
@@ -248,14 +265,13 @@ else:
                         teks_pdf = ekstrak_teks_dari_pdf(file_pdf)
                         simpan_ke_database(nama_mhs, label_kelas, teks_pdf)
                         counter += 1
-                st.success(f"⚡ Sukses! {counter} tugas kelas '{label_kelas}' berhasil dimasukkan ke pangkalan data pembanding.")
+                st.success(f"⚡ Sukses! {counter} tugas kelas '{label_kelas}' berhasil dimasukkan ke database pembanding.")
 
     # ------------------------------------------
     # MENU 3: MANAJEMEN IZIN DOSEN (SUPERADMIN ONLY)
     # ------------------------------------------
     elif menu == "⚙️ Aktivasi Izin Akun Dosen":
         st.title("⚙️ Otorisasi Akun Dosen Baru")
-        st.write("Berikan izin aktif kepada dosen yang baru mendaftar agar mereka bisa menggunakan fitur AI.")
         
         conn = sqlite3.connect('database_plagiarisme_baru.db')
         cursor = conn.cursor()
@@ -270,7 +286,7 @@ else:
             st.rerun()
             
         st.subheader("📋 Daftar Akun Dosen Terdaftar")
-        df_user = pd.read_sql_query("SELECT username as 'NIDN/Username', nama as 'Nama Lengkap', role as 'Jabatan', status as 'Status Izin' FROM pengguna WHERE role = 'Dosen'", conn)
+        df_user = pd.read_sql_query("SELECT username as 'NIDN/Username', nama as 'Nama Lengkap', status as 'Status Izin' FROM pengguna WHERE role = 'Dosen'", conn)
         conn.close()
         st.dataframe(df_user)
 
