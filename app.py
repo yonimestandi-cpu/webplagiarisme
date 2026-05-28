@@ -11,7 +11,7 @@ import os
 # 1. INITIALISASI DATABASE & MODEL AI
 # ==========================================
 def init_db():
-    conn = sqlite3.connect('kampus_repository.db')
+    conn = sqlite3.connect('database_baru.db')
     cursor = conn.cursor()
     # Tabel Dokumen Pembanding
     cursor.execute('''CREATE TABLE IF NOT EXISTS dokumen_alumni 
@@ -60,7 +60,7 @@ def ekstrak_teks_dari_pdf(file_pdf):
     return teks_utuh
 
 def ambil_data_alumni():
-    conn = sqlite3.connect('kampus_repository.db')
+    conn = sqlite3.connect('database_baru.db')
     cursor = conn.cursor()
     cursor.execute("SELECT penulis, judul, isi_teks FROM dokumen_alumni")
     data = cursor.fetchall()
@@ -68,7 +68,7 @@ def ambil_data_alumni():
     return data
 
 def simpan_ke_database(penulis, judul, isi_teks):
-    conn = sqlite3.connect('kampus_repository.db')
+    conn = sqlite3.connect('database_baru.db')
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM dokumen_alumni WHERE judul = ?", (judul,))
     if not cursor.fetchone():
@@ -92,7 +92,7 @@ if "logged_in" not in st.session_state:
     st.session_state.status = ""
 
 def login_user(username, password):
-    conn = sqlite3.connect('kampus_repository.db')
+    conn = sqlite3.connect('database_baru.db')
     cursor = conn.cursor()
     cursor.execute("SELECT username, nama, role, status FROM pengguna WHERE username = ? AND password = ?", (username, password))
     user = cursor.fetchone()
@@ -101,7 +101,7 @@ def login_user(username, password):
 
 def register_dosen(username, password, nama):
     try:
-        conn = sqlite3.connect('kampus_repository.db')
+        conn = sqlite3.connect('database_baru.db')
         cursor = conn.cursor()
         cursor.execute("INSERT INTO pengguna VALUES (?, ?, ?, 'Dosen', 'Pending')", (username, password, nama))
         conn.commit()
@@ -244,7 +244,7 @@ else:
         st.title("⚙️ Otorisasi Akun Dosen Baru")
         st.write("Berikan izin aktif kepada dosen yang baru mendaftar agar mereka bisa menggunakan fitur AI.")
         
-        conn = sqlite3.connect('kampus_repository.db')
+        conn = sqlite3.connect('database_baru.db')
         cursor = conn.cursor()
         
         user_target = st.text_input("Masukkan Username/NIDN Dosen:")
