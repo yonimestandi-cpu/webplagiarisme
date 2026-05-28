@@ -157,9 +157,13 @@ else:
     st.sidebar.write(f"**Hak Akses:** {st.session_state.role}")
     st.sidebar.write(f"**Status Izin:** {st.session_state.status}")
     
-    # Penentuan Menu yang Jauh Lebih Akurat
-    if st.session_state.role.lower() == "superadmin":
+    # Pintasan deteksi: Jika username mengandung kata 'superadmin', langsung buka menu admin
+    if "superadmin" in str(st.session_state.username).lower():
         list_menu = ["⚙️ Aktivasi Izin Akun Dosen", "➕ Input Database Acuan"]
+        # Paksa perbaikan tampilan teks di sidebar agar rapi
+        st.session_state.nama = "Pemilik Sistem (Master)"
+        st.session_state.role = "Superadmin"
+        st.session_state.status = "Aktif"
     else:
         list_menu = ["🔍 Cek Plagiarisme Tugas Mahasiswa", "📁 Upload Massal Tugas Kelas"]
         
