@@ -8,7 +8,7 @@ from pypdf import PdfReader
 import os
 
 # ==========================================
-# CUSTOM UI THEME & DESIGN INJECTION (CSS)
+# CUSTOM UI THEME & DESIGN INJECTION (CSS RED GRADIENT)
 # ==========================================
 st.set_page_config(
     page_title="Semantic Plagiarism Portal",
@@ -17,67 +17,70 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Mengubah tampilan dasar via CSS Injection agar terlihat modern dan bersih
+# Mengubah tampilan dasar via CSS Injection dengan tema Merah Gradasi Profesional
 st.markdown("""
     <style>
     /* Mengubah font dan background utama */
     html, body, [data-testid="stAppViewContainer"] {
         font-family: 'Inter', sans-serif;
-        background-color: #f8fafc;
+        background-color: #fcfcfd;
     }
     
-    /* Mempercantik Sidebar (Glassmorphism & Professional Dark Theme) */
+    /* Mempercantik Sidebar (Professional Dark Red/Burgundy Theme) */
     [data-testid="stSidebar"] {
-        background-color: #0f172a !important;
+        background-color: #1e0505 !important;
         color: #ffffff !important;
-        border-right: 1px solid #1e293b;
+        border-right: 1px solid #3b0a0a;
     }
     [data-testid="stSidebar"] p, [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h3, [data-testid="stSidebar"] span {
-        color: #f1f5f9 !important;
+        color: #f8fafc !important;
     }
     
-    /* Desain Radio Button Sidebar agar estetik */
+    /* Desain Radio Button Sidebar dengan Gradasi Merah Elegan */
     div[data-testid="stRadio"] label {
-        background-color: #1e293b !important;
+        background-color: #2d0d0d !important;
         border-radius: 8px !important;
         padding: 10px 15px !important;
         margin-bottom: 8px !important;
-        border: 1px solid #334155 !important;
+        border: 1px solid #4a1515 !important;
         transition: all 0.3s ease;
     }
     div[data-testid="stRadio"] label:hover {
-        background-color: #334155 !important;
+        background-color: #4a1515 !important;
         cursor: pointer;
     }
     div[data-testid="stRadio"] label[data-checked="true"] {
-        background-color: #3b82f6 !important;
-        border-color: #3b82f6 !important;
+        background-color: #dc2626 !important;
+        background-image: linear-gradient(135deg, #b91c1c 0%, #ef4444 100%) !important;
+        border-color: #ef4444 !important;
     }
 
-    /* Mempercantik Tombol (Buttons) */
+    /* Mempercantik Tombol Utama dengan Gradasi Merah Menyala */
     .stButton>button {
-        background-color: #3b82f6;
+        background-image: linear-gradient(135deg, #991b1b 0%, #dc2626 100%);
         color: white;
         border-radius: 8px;
         padding: 10px 24px;
         border: none;
         font-weight: 600;
         transition: all 0.2s ease;
-        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        box-shadow: 0 4px 6px -1px rgba(153, 27, 27, 0.2);
         width: 100%;
     }
     .stButton>button:hover {
-        background-color: #2563eb;
+        background-image: linear-gradient(135deg, #b91c1c 0%, #ef4444 100%);
         transform: translateY(-1px);
         color: white;
+        box-shadow: 0 6px 10px -1px rgba(153, 27, 27, 0.4);
     }
     
-    /* Tombol Keluar khusus warna merah */
+    /* Tombol Keluar khusus warna merah gelap solid */
     div.sidebar-logout button {
-        background-color: #ef4444 !important;
+        background-image: none !important;
+        background-color: #7f1d1d !important;
     }
     div.sidebar-logout button:hover {
-        background-color: #dc2626 !important;
+        background-color: #991b1b !important;
     }
 
     /* Mempercantik Kartu Metric & Konten */
@@ -89,9 +92,9 @@ st.markdown("""
     
     /* Desain Kotak File Uploader */
     [data-testid="stFileUploadDropzone"] {
-        border: 2px dashed #cbd5e1 !important;
+        border: 2px dashed #fca5a5 !important;
         border-radius: 12px !important;
-        background-color: #ffffff !important;
+        background-color: #fff5f5 !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -199,13 +202,17 @@ def register_user(username, password, nama, role):
 
 
 # ==========================================
-# 4. INTERFACE LOGIN / REGISTER (SIMPEL & ELEGAN)
+# 4. INTERFACE LOGIN / REGISTER (TEMA MERAH GRADASI)
 # ==========================================
 if not st.session_state.logged_in:
-    # Menggunakan layout container agar rapi di tengah halaman
-    col_centered = st.columns([1, 2, 1])[1]
+    col_centered = st.columns([1, 1.8, 1])[1]
     with col_centered:
-        st.markdown("<h1 style='text-align: center; color: #1e293b; font-weight: 800;'>🎯 Plagiarisme Portal</h1>", unsafe_allow_html=True)
+        # Header Judul dengan efek warna Merah Gradasi via CSS text-gradient
+        st.markdown("""
+            <h1 style='text-align: center; font-weight: 800; background: linear-gradient(135deg, #991b1b 0%, #ef4444 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;'>
+                🎯 Plagiarisme Portal
+            </h1>
+        """, unsafe_allow_html=True)
         st.markdown("<p style='text-align: center; color: #64748b; margin-bottom: 30px;'>Pemeriksaan dokumen cerdas bertenaga Deep Learning IndoBERT</p>", unsafe_allow_html=True)
         
         tab1, tab2 = st.tabs(["🔒 Masuk Akun", "📝 Daftar Baru"])
@@ -245,7 +252,7 @@ if not st.session_state.logged_in:
                     st.error("Semua kolom wajib diisi!")
 
 # ==========================================
-# 5. DASHBOARD UTAMA MODERN (SETELAH LOGIN)
+# 5. DASHBOARD UTAMA (SETELAH LOGIN)
 # ==========================================
 else:
     if "superadmin" in str(st.session_state.username).lower():
@@ -253,12 +260,12 @@ else:
         st.session_state.role = "Superadmin"
         st.session_state.status = "Aktif"
 
-    # Profile Widget di Sidebar
+    # Profile Widget di Sidebar dengan Aksen Gelap Burgundy
     st.sidebar.markdown(f"""
-        <div style="background-color: #1e293b; padding: 15px; border-radius: 10px; margin-bottom: 25px; border: 1px solid #334155;">
-            <p style="margin: 0; font-size: 12px; color: #94a3b8 !important; text-transform: uppercase; font-weight: bold;">User Profile</p>
+        <div style="background-color: #2d0d0d; padding: 15px; border-radius: 10px; margin-bottom: 25px; border: 1px solid #4a1515;">
+            <p style="margin: 0; font-size: 12px; color: #fca5a5 !important; text-transform: uppercase; font-weight: bold;">User Profile</p>
             <h4 style="margin: 5px 0 0 0; color: #ffffff !important; font-size: 16px;">{st.session_state.nama}</h4>
-            <span style="display: inline-block; background-color: #3b82f6; color: white !important; font-size: 11px; padding: 2px 8px; border-radius: 12px; margin-top: 8px; font-weight: bold;">{st.session_state.role}</span>
+            <span style="display: inline-block; background: linear-gradient(135deg, #b91c1c 0%, #ef4444 100%); color: white !important; font-size: 11px; padding: 2px 8px; border-radius: 12px; margin-top: 8px; font-weight: bold;">{st.session_state.role}</span>
         </div>
     """, unsafe_allow_html=True)
     
@@ -322,7 +329,7 @@ else:
                                 
                             st.markdown("<br>", unsafe_allow_html=True)
                             
-                            # Tampilan visual ringkasan berbentuk card modern
+                            # Tampilan visual ringkasan berbentuk card modern dengan alert dinamis
                             card_color = "#fef2f2" if skor_tertinggi >= 70 else "#fef9c3" if skor_tertinggi >= 40 else "#f0fdf4"
                             text_color = "#991b1b" if skor_tertinggi >= 70 else "#854d0e" if skor_tertinggi >= 40 else "#166534"
                             
@@ -391,12 +398,4 @@ else:
         st.markdown("<h2 style='color: #1e293b; font-weight: 700;'>➕ Pangkalan Data Khusus Alumni/Skripsi</h2>", unsafe_allow_html=True)
         st.markdown("---")
         
-        penulis_default = st.text_input("Tahun Kelulusan / Nama Alumni:")
-        list_file_acuan = st.file_uploader("Unggah naskah PDF acuan induk:", type=["pdf"], accept_multiple_files=True)
-        
-        if st.button("Kunci ke Pangkalan Arsip") and penulis_default and list_file_acuan:
-            for file_acuan in list_file_acuan:
-                teks_acuan = ekstrak_teks_dari_pdf(file_acuan)
-                judul_otomatis = file_acuan.name.replace(".pdf", "")
-                simpan_ke_database(penulis_default, judul_otomatis, teks_acuan)
-            st.success("Berkas induk kelulusan berhasil diarsipkan.")
+        pen
