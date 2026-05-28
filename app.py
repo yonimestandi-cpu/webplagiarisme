@@ -1,290 +1,402 @@
-# =========================================================
-# 🎨 CUSTOM UI / MODERN STYLE
-# =========================================================
+import streamlit as st
+import sqlite3
+import pandas as pd
+import torch
+from transformers import AutoTokenizer, AutoModel
+from sklearn.metrics.pairwise import cosine_similarity
+from pypdf import PdfReader
+import os
+
+# ==========================================
+# CUSTOM UI THEME & DESIGN INJECTION (CSS)
+# ==========================================
 st.set_page_config(
     page_title="Semantic Plagiarism Portal",
-    page_icon="🧠",
+    page_icon="🎯",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
+# Mengubah tampilan dasar via CSS Injection agar terlihat modern dan bersih
 st.markdown("""
-<style>
-
-/* ===== GLOBAL ===== */
-html, body, [class*="css"]{
-    font-family: 'Poppins', sans-serif;
-}
-
-.main {
-    background: linear-gradient(135deg, #f5f7ff 0%, #eef2ff 100%);
-}
-
-/* ===== SIDEBAR ===== */
-section[data-testid="stSidebar"]{
-    background: linear-gradient(180deg, #111827 0%, #1f2937 100%);
-    border-right: 1px solid rgba(255,255,255,0.08);
-}
-
-section[data-testid="stSidebar"] *{
-    color: white !important;
-}
-
-section[data-testid="stSidebar"] .stRadio > div{
-    gap: 10px;
-}
-
-section[data-testid="stSidebar"] label{
-    background: rgba(255,255,255,0.06);
-    padding: 12px 14px;
-    border-radius: 14px;
-    transition: 0.3s;
-}
-
-section[data-testid="stSidebar"] label:hover{
-    background: rgba(255,255,255,0.14);
-    transform: translateX(4px);
-}
-
-/* ===== TITLE ===== */
-.main-title{
-    font-size: 42px;
-    font-weight: 800;
-    color: #111827;
-    margin-bottom: 5px;
-}
-
-.sub-title{
-    color: #6b7280;
-    font-size: 17px;
-    margin-bottom: 30px;
-}
-
-/* ===== CARD ===== */
-.custom-card{
-    background: white;
-    padding: 25px;
-    border-radius: 24px;
-    box-shadow: 0 8px 30px rgba(0,0,0,0.05);
-    border: 1px solid rgba(0,0,0,0.05);
-    margin-bottom: 20px;
-}
-
-/* ===== BUTTON ===== */
-.stButton > button{
-    width: 100%;
-    border-radius: 14px;
-    border: none;
-    padding: 12px 20px;
-    font-weight: 700;
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
-    color: white;
-    transition: 0.3s;
-}
-
-.stButton > button:hover{
-    transform: translateY(-2px);
-    box-shadow: 0 10px 20px rgba(99,102,241,0.3);
-}
-
-/* ===== INPUT ===== */
-.stTextInput input,
-.stTextArea textarea,
-.stSelectbox div[data-baseweb="select"]{
-    border-radius: 14px !important;
-    border: 1px solid #dbeafe !important;
-    padding: 10px !important;
-}
-
-/* ===== FILE UPLOADER ===== */
-[data-testid="stFileUploader"]{
-    background: white;
-    border-radius: 20px;
-    padding: 20px;
-    border: 2px dashed #c7d2fe;
-}
-
-/* ===== METRIC ===== */
-[data-testid="metric-container"]{
-    background: white;
-    border-radius: 20px;
-    padding: 20px;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.04);
-    border: 1px solid rgba(0,0,0,0.04);
-}
-
-/* ===== DATAFRAME ===== */
-[data-testid="stDataFrame"]{
-    background: white;
-    padding: 15px;
-    border-radius: 20px;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.04);
-}
-
-/* ===== ALERT ===== */
-.stSuccess, .stWarning, .stError, .stInfo{
-    border-radius: 16px !important;
-}
-
-/* ===== HERO SECTION ===== */
-.hero-box{
-    background: linear-gradient(135deg,#4f46e5,#7c3aed);
-    padding: 40px;
-    border-radius: 28px;
-    color: white;
-    margin-bottom: 25px;
-    box-shadow: 0 15px 40px rgba(99,102,241,0.3);
-}
-
-.hero-title{
-    font-size: 42px;
-    font-weight: 800;
-    margin-bottom: 10px;
-}
-
-.hero-desc{
-    font-size: 18px;
-    opacity: 0.95;
-}
-
-/* ===== TAB ===== */
-.stTabs [data-baseweb="tab-list"]{
-    gap: 10px;
-}
-
-.stTabs [data-baseweb="tab"]{
-    background: white;
-    border-radius: 12px 12px 0 0;
-    padding: 10px 18px;
-}
-
-/* ===== ANIMATION ===== */
-@keyframes fadeIn{
-    from{
-        opacity:0;
-        transform:translateY(10px);
+    <style>
+    /* Mengubah font dan background utama */
+    html, body, [data-testid="stAppViewContainer"] {
+        font-family: 'Inter', sans-serif;
+        background-color: #f8fafc;
     }
-    to{
-        opacity:1;
-        transform:translateY(0);
+    
+    /* Mempercantik Sidebar (Glassmorphism & Professional Dark Theme) */
+    [data-testid="stSidebar"] {
+        background-color: #0f172a !important;
+        color: #ffffff !important;
+        border-right: 1px solid #1e293b;
     }
-}
+    [data-testid="stSidebar"] p, [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h3, [data-testid="stSidebar"] span {
+        color: #f1f5f9 !important;
+    }
+    
+    /* Desain Radio Button Sidebar agar estetik */
+    div[data-testid="stRadio"] label {
+        background-color: #1e293b !important;
+        border-radius: 8px !important;
+        padding: 10px 15px !important;
+        margin-bottom: 8px !important;
+        border: 1px solid #334155 !important;
+        transition: all 0.3s ease;
+    }
+    div[data-testid="stRadio"] label:hover {
+        background-color: #334155 !important;
+        cursor: pointer;
+    }
+    div[data-testid="stRadio"] label[data-checked="true"] {
+        background-color: #3b82f6 !important;
+        border-color: #3b82f6 !important;
+    }
 
-.custom-card,
-.hero-box,
-[data-testid="metric-container"]{
-    animation: fadeIn 0.5s ease-in-out;
-}
+    /* Mempercantik Tombol (Buttons) */
+    .stButton>button {
+        background-color: #3b82f6;
+        color: white;
+        border-radius: 8px;
+        padding: 10px 24px;
+        border: none;
+        font-weight: 600;
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        width: 100%;
+    }
+    .stButton>button:hover {
+        background-color: #2563eb;
+        transform: translateY(-1px);
+        color: white;
+    }
+    
+    /* Tombol Keluar khusus warna merah */
+    div.sidebar-logout button {
+        background-color: #ef4444 !important;
+    }
+    div.sidebar-logout button:hover {
+        background-color: #dc2626 !important;
+    }
 
-</style>
+    /* Mempercantik Kartu Metric & Konten */
+    div[data-testid="stMetricValue"] {
+        font-size: 36px !important;
+        font-weight: 800 !important;
+        color: #1e293b !important;
+    }
+    
+    /* Desain Kotak File Uploader */
+    [data-testid="stFileUploadDropzone"] {
+        border: 2px dashed #cbd5e1 !important;
+        border-radius: 12px !important;
+        background-color: #ffffff !important;
+    }
+    </style>
 """, unsafe_allow_html=True)
 
-# =========================================================
-# HERO SECTION LOGIN
-# =========================================================
+
+# ==========================================
+# 1. INITIALISASI DATABASE & MODEL AI
+# ==========================================
+def init_db():
+    conn = sqlite3.connect('database_plagiarisme_baru.db')
+    cursor = conn.cursor()
+    cursor.execute('''CREATE TABLE IF NOT EXISTS dokumen_alumni 
+                      (id INTEGER PRIMARY KEY AUTOINCREMENT, penulis TEXT, judul TEXT, isi_teks TEXT)''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS pengguna 
+                      (username TEXT PRIMARY KEY, password TEXT, nama TEXT, role TEXT, status TEXT)''')
+    
+    cursor.execute("SELECT username FROM pengguna WHERE username = 'superadmin'")
+    if not cursor.fetchone():
+        cursor.execute("INSERT INTO pengguna VALUES ('superadmin', 'master123', 'Pemilik Sistem', 'Superadmin', 'Aktif')")
+        cursor.execute("INSERT INTO pengguna VALUES ('dosen1', 'dosen123', 'Dr. Irwan (Dosen NLP)', 'Dosen', 'Pending')")
+    conn.commit()
+    conn.close()
+
+init_db()
+
+@st.cache_resource
+def load_indo_bert():
+    tokenizer = AutoTokenizer.from_pretrained("indobenchmark/indobert-base-p1")
+    model = AutoModel.from_pretrained("indobenchmark/indobert-base-p1")
+    return tokenizer, model
+
+tokenizer, model = load_indo_bert()
+
+def get_embedding(text):
+    inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=512)
+    with torch.no_grad():
+        outputs = model(**inputs)
+    embeddings = outputs.last_hidden_state.mean(dim=1)
+    return embeddings.numpy()
+
+
+# ==========================================
+# 2. FUNGSI EKSTRAKSI & MANAJEMEN DATA
+# ==========================================
+def ekstrak_teks_dari_pdf(file_pdf):
+    reader = PdfReader(file_pdf)
+    teks_utuh = ""
+    for halaman in reader.pages:
+        teks_halaman = halaman.extract_text()
+        if teks_halaman:
+            teks_utuh += teks_halaman + "\n"
+    return teks_utuh
+
+def ambil_data_alumni():
+    conn = sqlite3.connect('database_plagiarisme_baru.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT penulis, judul, isi_teks FROM dokumen_alumni")
+    data = cursor.fetchall()
+    conn.close()
+    return data
+
+def simpan_ke_database(penulis, judul, isi_teks):
+    conn = sqlite3.connect('database_plagiarisme_baru.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM dokumen_alumni WHERE judul = ?", (judul,))
+    if not cursor.fetchone():
+        cursor.execute("INSERT INTO dokumen_alumni (penulis, judul, isi_teks) VALUES (?, ?, ?)", 
+                       (penulis, judul, isi_teks))
+        conn.commit()
+        conn.close()
+        return True
+    conn.close()
+    return False
+
+
+# ==========================================
+# 3. SISTEM AUTENTIKASI (SESSION STATE)
+# ==========================================
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.username = ""
+    st.session_state.nama = ""
+    st.session_state.role = ""
+    st.session_state.status = ""
+
+def login_user(username, password):
+    conn = sqlite3.connect('database_plagiarisme_baru.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT username, nama, role, status FROM pengguna WHERE username = ? AND password = ?", (username, password))
+    user = cursor.fetchone()
+    conn.close()
+    return user
+
+def register_user(username, password, nama, role):
+    status_awal = "Aktif" if role == "Mahasiswa" else "Pending"
+    try:
+        conn = sqlite3.connect('database_plagiarisme_baru.db')
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO pengguna VALUES (?, ?, ?, ?, ?)", (username, password, nama, role, status_awal))
+        conn.commit()
+        conn.close()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+
+
+# ==========================================
+# 4. INTERFACE LOGIN / REGISTER (SIMPEL & ELEGAN)
+# ==========================================
 if not st.session_state.logged_in:
+    # Menggunakan layout container agar rapi di tengah halaman
+    col_centered = st.columns([1, 2, 1])[1]
+    with col_centered:
+        st.markdown("<h1 style='text-align: center; color: #1e293b; font-weight: 800;'>🎯 Plagiarisme Portal</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #64748b; margin-bottom: 30px;'>Pemeriksaan dokumen cerdas bertenaga Deep Learning IndoBERT</p>", unsafe_allow_html=True)
+        
+        tab1, tab2 = st.tabs(["🔒 Masuk Akun", "📝 Daftar Baru"])
+        
+        with tab1:
+            user_input = st.text_input("Username / ID Pengguna:")
+            pass_input = st.text_input("Password:", type="password")
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("Masuk"):
+                user_data = login_user(user_input, pass_input)
+                if user_data:
+                    st.session_state.logged_in = True
+                    st.session_state.username = str(user_data[0])
+                    st.session_state.nama = str(user_data[1])
+                    st.session_state.role = str(user_data[2])
+                    st.session_state.status = str(user_data[3])
+                    st.rerun()
+                else:
+                    st.error("Akun tidak ditemukan atau password salah!")
+                    
+        with tab2:
+            reg_role = st.selectbox("Saya adalah:", ["Mahasiswa", "Dosen"])
+            reg_user = st.text_input("NPM Mahasiswa / NIDN Dosen:")
+            reg_nama = st.text_input("Nama Lengkap:")
+            reg_pass = st.text_input("Buat Password:", type="password", key="reg_pass")
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("Daftar Sekarang"):
+                if reg_user and reg_nama and reg_pass:
+                    if register_user(reg_user, reg_pass, reg_nama, reg_role):
+                        if reg_role == "Mahasiswa":
+                            st.success("Sukses! Akun Mahasiswa langsung AKTIF. Silakan login pada tab Masuk.")
+                        else:
+                            st.success("Sukses diajukan! Menunggu aktivasi Superadmin.")
+                    else:
+                        st.warning("ID tersebut sudah terdaftar.")
+                else:
+                    st.error("Semua kolom wajib diisi!")
 
-    st.markdown("""
-    <div class="hero-box">
-        <div class="hero-title">🧠 Semantic Plagiarism Portal</div>
-        <div class="hero-desc">
-            Sistem pemeriksaan kemiripan tugas berbasis Artificial Intelligence 
-            menggunakan IndoBERT untuk mendeteksi plagiarisme semantik secara modern, cepat, dan akurat.
+# ==========================================
+# 5. DASHBOARD UTAMA MODERN (SETELAH LOGIN)
+# ==========================================
+else:
+    if "superadmin" in str(st.session_state.username).lower():
+        st.session_state.nama = "Pemilik Sistem (Master)"
+        st.session_state.role = "Superadmin"
+        st.session_state.status = "Aktif"
+
+    # Profile Widget di Sidebar
+    st.sidebar.markdown(f"""
+        <div style="background-color: #1e293b; padding: 15px; border-radius: 10px; margin-bottom: 25px; border: 1px solid #334155;">
+            <p style="margin: 0; font-size: 12px; color: #94a3b8 !important; text-transform: uppercase; font-weight: bold;">User Profile</p>
+            <h4 style="margin: 5px 0 0 0; color: #ffffff !important; font-size: 16px;">{st.session_state.nama}</h4>
+            <span style="display: inline-block; background-color: #3b82f6; color: white !important; font-size: 11px; padding: 2px 8px; border-radius: 12px; margin-top: 8px; font-weight: bold;">{st.session_state.role}</span>
         </div>
-    </div>
     """, unsafe_allow_html=True)
+    
+    # Navigasi Menu
+    if st.session_state.role == "Superadmin":
+        list_menu = ["🔍 Cek Plagiarisme", "📁 Upload Massal Kelas", "⚙️ Aktivasi Akun Dosen", "➕ Input Database Acuan"]
+    elif st.session_state.role == "Dosen":
+        list_menu = ["🔍 Cek Plagiarisme", "📁 Upload Massal Kelas"]
+    else:
+        list_menu = ["🔍 Cek Plagiarisme"]
+        
+    menu = st.sidebar.radio("NAVIGASI UTAMA", list_menu)
+    
+    st.sidebar.markdown("<br><br>", unsafe_allow_html=True)
+    st.sidebar.markdown('<div class="sidebar-logout">', unsafe_allow_html=True)
+    if st.sidebar.button("🚪 Keluar Aplikasi"):
+        st.session_state.logged_in = False
+        st.rerun()
+    st.sidebar.markdown('</div>', unsafe_allow_html=True)
 
-# =========================================================
-# SIDEBAR MODERN
-# =========================================================
-if st.session_state.logged_in:
+    # ------------------------------------------
+    # MENU 1: CEK PLAGIARISME
+    # ------------------------------------------
+    if menu == "🔍 Cek Plagiarisme":
+        st.markdown("<h2 style='color: #1e293b; font-weight: 700;'>🔍 Analisis Semantik Dokumen</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #64748b;'>Unggah tugas kuliah format PDF untuk menguji kecocokan kontekstual dengan pangkalan data.</p>", unsafe_allow_html=True)
+        st.markdown("---")
+        
+        if st.session_state.status == "Pending":
+            st.warning("⚠️ Akses ditangguhkan sementara. Hubungi Superadmin untuk aktivasi.")
+        else:
+            file_diunggah = st.file_uploader("", type=["pdf"])
+            
+            col_btn1, col_btn2 = st.columns([1, 4])
+            with col_btn1:
+                tombol_mulai = st.button("Mulai Deteksi AI")
+                
+            if tombol_mulai and file_diunggah:
+                with st.spinner("Model NLP IndoBERT sedang membaca konteks bahasa..."):
+                    teks_uji = ekstrak_teks_dari_pdf(file_diunggah)
+                    if teks_uji.strip() == "":
+                        st.error("File PDF tidak berisi teks digital.")
+                    else:
+                        database_alumni = ambil_data_alumni()
+                        if len(database_alumni) == 0:
+                            st.warning("Database acuan kosong. Silakan isi data terlebih dahulu.")
+                        else:
+                            vektor_uji = get_embedding(teks_uji)
+                            hasil_list = []
+                            skor_tertinggi = 0
+                            
+                            for penulis, judul, isi_teks in database_alumni:
+                                vektor_asal = get_embedding(isi_teks)
+                                skor_kemiripan = cosine_similarity(vektor_uji, vektor_asal)[0][0]
+                                persentase = skor_kemiripan.item() * 100
+                                
+                                kategori = "🔴 Tinggi" if persentase >= 70 else "🟡 Sedang" if persentase >= 40 else "🟢 Rendah"
+                                if persentase > skor_tertinggi: skor_tertinggi = persentase
+                                
+                                hasil_list.append({"Sumber Data": penulis, "Kategori/Mata Kuliah": judul, "Kemiripan Konteks": f"{persentase:.2f}%", "Status": kategori})
+                                
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            
+                            # Tampilan visual ringkasan berbentuk card modern
+                            card_color = "#fef2f2" if skor_tertinggi >= 70 else "#fef9c3" if skor_tertinggi >= 40 else "#f0fdf4"
+                            text_color = "#991b1b" if skor_tertinggi >= 70 else "#854d0e" if skor_tertinggi >= 40 else "#166534"
+                            
+                            st.markdown(f"""
+                                <div style="background-color: {card_color}; border-left: 5px solid {text_color}; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+                                    <p style="margin: 0; font-size: 14px; color: {text_color}; font-weight: bold; text-transform: uppercase;">Hasil Analisis Tertinggi</p>
+                                    <h1 style="margin: 5px 0 0 0; color: {text_color}; font-weight: 800; font-size: 42px;">{skor_tertinggi:.2f}%</h1>
+                                    <p style="margin: 5px 0 0 0; color: #475569; font-size: 14px;">Kesimpulan: Berkas terindikasi <b>{kategori}</b> meniru dokumen referensi di database.</p>
+                                </div>
+                            """, unsafe_allow_html=True)
+                            
+                            st.subheader("📋 Rincian Matriks Perbandingan Semantik")
+                            st.dataframe(pd.DataFrame(hasil_list), use_container_width=True)
 
-    st.sidebar.markdown("""
-    <div style='text-align:center; padding:10px 0 20px 0;'>
-        <img src='https://cdn-icons-png.flaticon.com/512/3135/3135715.png' width='90'>
-        <h2 style='margin-top:10px;'>AI Campus Portal</h2>
-    </div>
-    """, unsafe_allow_html=True)
+    # ------------------------------------------
+    # MENU 2: UPLOAD MASSAL KELAS
+    # ------------------------------------------
+    elif menu == "📁 Upload Massal Kelas":
+        st.markdown("<h2 style='color: #1e293b; font-weight: 700;'>📁 Ingesti Data Kolektif</h2>", unsafe_allow_html=True)
+        st.markdown("---")
+        
+        label_kelas = st.text_input("Nama Mata Kuliah / Nama Kelas Pembanding:")
+        list_upload_massal = st.file_uploader("Unggah sekaligus berkas tugas satu kelas (.pdf):", type=["pdf"], accept_multiple_files=True)
+        
+        if st.button("Simpan Data Massal") and label_kelas and list_upload_massal:
+            counter = 0
+            with st.spinner("Mengekstrak berkas kelas..."):
+                for file_pdf in list_upload_massal:
+                    nama_mhs = file_pdf.name.replace(".pdf", "").replace("_", " ")
+                    teks_pdf = ekstrak_teks_dari_pdf(file_pdf)
+                    simpan_ke_database(nama_mhs, label_kelas, teks_pdf)
+                    counter += 1
+            st.success(f"🔥 Berhasil menyuntikkan {counter} dokumen ke kelas '{label_kelas}'.")
 
-# =========================================================
-# DASHBOARD HEADER
-# =========================================================
-if st.session_state.logged_in:
+    # ------------------------------------------
+    # MENU 3: MANAJEMEN IZIN DOSEN
+    # ------------------------------------------
+    elif menu == "⚙️ Aktivasi Akun Dosen":
+        st.markdown("<h2 style='color: #1e293b; font-weight: 700;'>⚙️ Manajemen Akses Staf Dosen</h2>", unsafe_allow_html=True)
+        st.markdown("---")
+        
+        conn = sqlite3.connect('database_plagiarisme_baru.db')
+        cursor = conn.cursor()
+        
+        col_act1, col_act2 = st.columns(2)
+        with col_act1:
+            user_target = st.text_input("ID Dosen / Username Target:")
+        with col_act2:
+            status_baru = st.selectbox("Set Otorisasi:", ["Aktif", "Pending"])
+            
+        if st.button("Terapkan Hak Akses"):
+            cursor.execute("UPDATE pengguna SET status = ? WHERE username = ? AND role = 'Dosen'", (status_baru, user_target))
+            conn.commit()
+            st.success(f"Status '{user_target}' sukses diubah ke {status_baru}!")
+            st.rerun()
+            
+        st.markdown("<br><br><h4>Daftar Registrasi Akun Staf Pengajar</h4>", unsafe_allow_html=True)
+        df_user = pd.read_sql_query("SELECT username as 'NIDN/Username', nama as 'Nama Staf', status as 'Status Izin' FROM pengguna WHERE role = 'Dosen'", conn)
+        conn.close()
+        st.dataframe(df_user, use_container_width=True)
 
-    st.markdown(f"""
-    <div class="hero-box">
-        <div class="hero-title">👋 Selamat Datang, {st.session_state.nama}</div>
-        <div class="hero-desc">
-            Role: <b>{st.session_state.role}</b> • 
-            Status: <b>{st.session_state.status}</b><br>
-            Nikmati pengalaman pemeriksaan dokumen yang lebih modern dan interaktif.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-# =========================================================
-# WRAP CONTENT DALAM CARD
-# =========================================================
-
-# CONTOH:
-# GANTI:
-# st.title("📊 Pemeriksaan Tingkat Kemiripan Dokumen")
-
-# MENJADI:
-st.markdown("""
-<div class="custom-card">
-    <h2>📊 Pemeriksaan Tingkat Kemiripan Dokumen</h2>
-    <p>
-        Unggah dokumen PDF untuk dianalisis menggunakan teknologi AI Semantic Similarity.
-    </p>
-</div>
-""", unsafe_allow_html=True)
-
-# =========================================================
-# TAMPILAN LOGIN MODERN
-# =========================================================
-
-# Tambahkan sebelum tab login/register
-if not st.session_state.logged_in:
-
-    colA, colB, colC = st.columns([1,2,1])
-
-    with colB:
-        st.markdown("""
-        <div class="custom-card">
-            <h2 style='text-align:center;'>🚀 Portal Akademik AI</h2>
-            <p style='text-align:center;color:gray;'>
-                Platform pemeriksaan tugas modern untuk mahasiswa & dosen.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-
-# =========================================================
-# METRIC TAMBAHAN AGAR LEBIH MODERN
-# =========================================================
-
-# Setelah login dashboard
-if st.session_state.logged_in:
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.metric("📄 Total Dokumen", "1.2K+")
-
-    with col2:
-        st.metric("🧠 AI Model", "IndoBERT")
-
-    with col3:
-        st.metric("⚡ Status Sistem", "Aktif")
-
-# =========================================================
-# FOOTER MODERN
-# =========================================================
-st.markdown("""
-<hr style="margin-top:50px;">
-
-<div style='text-align:center; color:gray; padding-bottom:20px;'>
-    <b>Semantic Plagiarism Portal</b><br>
-    Powered by IndoBERT • Streamlit • SQLite • AI Semantic Detection
-</div>
-""", unsafe_allow_html=True)
+    # ------------------------------------------
+    # MENU 4: INPUT DATABASE ACUAN
+    # ------------------------------------------
+    elif menu == "➕ Input Database Acuan":
+        st.markdown("<h2 style='color: #1e293b; font-weight: 700;'>➕ Pangkalan Data Khusus Alumni/Skripsi</h2>", unsafe_allow_html=True)
+        st.markdown("---")
+        
+        penulis_default = st.text_input("Tahun Kelulusan / Nama Alumni:")
+        list_file_acuan = st.file_uploader("Unggah naskah PDF acuan induk:", type=["pdf"], accept_multiple_files=True)
+        
+        if st.button("Kunci ke Pangkalan Arsip") and penulis_default and list_file_acuan:
+            for file_acuan in list_file_acuan:
+                teks_acuan = ekstrak_teks_dari_pdf(file_acuan)
+                judul_otomatis = file_acuan.name.replace(".pdf", "")
+                simpan_ke_database(penulis_default, judul_otomatis, teks_acuan)
+            st.success("Berkas induk kelulusan berhasil diarsipkan.")
